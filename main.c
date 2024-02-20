@@ -1,8 +1,8 @@
 /*
  * main.c
  *
- *  Created on: Mar 17 2017
- *      Author: david
+ *  Created on: Feb 19, 2024
+ *      Author: Sumneet
  */
 
 #include <stdio.h>
@@ -25,7 +25,9 @@ int main(int argc, char *argv[]) {
 	// DO NOT REMOVE THE BLOCK ABOVE THIS LINE //
 
 
-	char *cmdline = (char*) malloc(MAXBUF); // stores user input from commmand line
+	//char *cmdline = (char*) malloc(MAXBUF); // stores user input from commmand line
+
+	shell();
 
 	return 0;
 }

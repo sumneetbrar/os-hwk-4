@@ -1,8 +1,13 @@
 #define MAXBUF 256  // max number of characteres allowed on command line
 
-// TODO: Any global variables go below
-int thisIsGlobal = 10;  // delete before submission
+// Function declarations
+void shell(void);
 
-// TODO: Function declarations go below
-void example(int*); // delete before submission
+void commandMode1(char *cmd, char **list);
+void commandMode2(char *cmd, char **list);
 
+void runForeground(char *line, char **list);
+void runBackground(char *line, char **list);
+
+char *trim(char *str);
+void changeDirectory(char *path);
