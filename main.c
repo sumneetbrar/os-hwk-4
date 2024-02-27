@@ -24,9 +24,6 @@ int main(int argc, char *argv[]) {
 	setrlimit(RLIMIT_NPROC, &limit);
 	// DO NOT REMOVE THE BLOCK ABOVE THIS LINE //
 
-
-	//char *cmdline = (char*) malloc(MAXBUF); // stores user input from commmand line
-
 	shell();
 
 	return 0;

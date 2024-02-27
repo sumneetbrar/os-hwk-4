@@ -20,14 +20,11 @@
 /**
  * Run the shell
  * 
- * Todo: 
- * 1) check correctness of changeDirectory
- * 2) finish implementing mode 1
- * 3) finish implementing mode 2
 */
 void shell(void) {
     char *line = (char*) malloc(MAXBUF); // create an empty buffer to store the input
-    char *list[MAXBUF / 2 + 1]; // array for command and arguments
+    char *list[MAXBUF / 2]; // array for command and arguments
+    int run = 0; // default should be run in foreground
 
     while(1) {
         printf("dsh> ");  // prompt user
@@ -42,23 +39,28 @@ void shell(void) {
         if (*trimmedLine == '\0') {
             continue;  // if empty, skip this iteration
         }
-        // alternative - does this work the same?
-        if (strlen(trimmedLine) == 0) {
-            continue;
-        }
 
         // Look at the input and decide what to run
         if (*trimmedLine == '/') {
-            commandMode1(line, list);
+            int length = strlen(trimmedLine);
+            if (trimmedLine[length - 1] == '&') {
+                trimmedLine[length - 1] = '\0';
+                trimmedLine = trim(trimmedLine);
+                run = 1;
+            }
+            else run = 0;
+            commandMode1(trimmedLine, list, run);
         }
         else if (strcmp(trimmedLine, "exit") == 0) {
             printf("Exiting shell...\n");
             free(line);
             exit(0);
         }
-        else if (strncmp(trimmedLine, "cd", 3) == 0) {
+        else if (strncmp(trimmedLine, "cd", 2) == 0) {
             char *path = trimmedLine + 3;
-            changeDirectory(path);
+            if(chdir(path) == -1) {
+                perror("ERROR - changing directory failed ");
+            }
         }
         else if (strcmp(trimmedLine, "pwd") == 0) {
             char cwd[MAXBUF];
@@ -66,7 +68,7 @@ void shell(void) {
             printf("%s\n", cwd);
         }
         else {
-            commandMode2(line, list);
+            commandMode2(trimmedLine, list);
         }
     }
 }
@@ -74,23 +76,27 @@ void shell(void) {
 /*
  * Mode 1 - we were given the full path
 */
-void commandMode1(char *line, char **list) {
-    if (access(line, F_OK | X_OK) == 0) {
+void commandMode1(char *line, char **list, int run) {
+    int i = 0;
+    list[i] = strtok(line, " ");
+    while (list[i] != NULL && i < MAXBUF / 2) {
+        list[++i] = strtok(NULL, " ");
+    }
+
+    if (access(list[0], F_OK | X_OK) == 0) {
         // File exists and is executable! Can run!
 
         // run foreground or background?
-        int length = strlen(line);
-        if (line[length - 1] == '&') {
-            line[length - 1] = '\0'; // remove the &
-            runBackground(line, list);
+        if (run != 0) {
+            runBackground(list[0], list);
         }
         else {
-            runForeground(line, list);
+            runForeground(list[0], list);
         }
     }
     else {
         // No good! File doesn't exist or is not executable!
-        printf("Not a valid path\n");
+        printf("Not a valid path.\n");
     }
 }
 
@@ -99,7 +105,16 @@ void commandMode1(char *line, char **list) {
  * Run in background
 */
 void runBackground(char *line, char **list) {
-    printf("I'm running in the background");
+    pid_t pid = fork();
+
+    if (pid == 0) {  // child process
+        if (execv(line, list)) exit(1);
+        // child will become zombie and be automatically reaped?
+    }
+    // parent process returns to shell
+    else {
+        list = NULL;
+    }
 }
 
 
@@ -107,21 +122,15 @@ void runBackground(char *line, char **list) {
  * Run in foreground
 */
 void runForeground(char *line, char **list) {
-    int i = 0;
-    list[i] = strtok(line, " ");
-    while (list[i] != NULL && i < MAXBUF / 2) {
-        list[++i] = strtok(NULL, " ");
-    }
-
     pid_t pid = fork();
 
-    // both child and parent process are active after printing. 
     if (pid == 0) {  // child process
-        printf("Child process!\n");
-        exit(0); // with this addition, parent runs first?
+        if (execv(line, list)) {
+            exit(1); // exec failed
+        }
     }
     else {   // parent
-        printf("Parent process!\n");
+        list = NULL;
         wait(NULL);
     }
 }
@@ -131,7 +140,63 @@ void runForeground(char *line, char **list) {
  * Mode 2 - we were not given the full path
 */
 void commandMode2(char *line, char **list) {
-    printf("Mode 2 activated.");
+    int i = 0;
+    list[i] = strtok(line, " ");
+    while (list[i] != NULL && i < MAXBUF / 2) {
+        list[++i] = strtok(NULL, " ");
+    }
+
+    char cwd[MAXBUF];
+    getcwd(cwd, sizeof(cwd));
+
+    // cwd now holds the current working directory
+    // now, concatenate it with the file name
+
+    size_t length = strlen(cwd) + strlen(line) + 2;
+    char *pathname = (char*) malloc(length);
+
+    // construct path with current directory and command name
+    snprintf(pathname, length, "%s/%s", cwd, line);
+
+    struct stat fstat;
+
+    if (stat(pathname, &fstat) == 0 && S_ISREG(fstat.st_mode)) {
+        // it is present in this directory
+        runForeground(line, list);
+    }
+    else {
+        // it is not present in the current directory
+
+        // get the path
+        char *path = getenv("PATH");
+        char *pathDup = strdup(path);
+
+        int i = 0;
+        char *token = strtok(pathDup, ":"); 
+        while (token != NULL) {
+            // construct path for each possible directory
+            char *fullpath = malloc(strlen(token) + strlen(line) + 2);
+            snprintf(fullpath, strlen(token) + strlen(line) + 2, "%s/%s", token, line);
+
+            // if we find the file in one of the paths, break
+            if (stat(fullpath, &fstat) == 0 && S_ISREG(fstat.st_mode)) {
+                i = 1;
+                runForeground(fullpath, list);
+                free(fullpath);
+                break;
+            }
+
+            free(fullpath);
+            token = strtok(NULL, ":"); // get next directory
+        }
+
+        if(i != 1) {
+            printf("Command not found.\n");
+        }
+
+        free(pathDup);
+    }
+    free(pathname);
 }
 
 /**
@@ -160,12 +225,4 @@ char *trim(char *str) {
     *(end + 1) = '\0';
 
     return start;
-}
-
-
-/**
- * Function to change the directory
-*/
-void changeDirectory(char *path) {
-    chdir(path);
 }
