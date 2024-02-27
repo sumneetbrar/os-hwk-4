@@ -57,9 +57,13 @@ void shell(void) {
             exit(0);
         }
         else if (strncmp(trimmedLine, "cd", 2) == 0) {
-            char *path = trimmedLine + 3;
-            if(chdir(path) == -1) {
-                perror("ERROR - changing directory failed ");
+            if (strlen(trimmedLine) == 2) {
+                char *path = " ";
+                changeDirectory(path, 1);
+            }
+            else {
+                char *path = trimmedLine + 3;
+                changeDirectory(path, 0);
             }
         }
         else if (strcmp(trimmedLine, "pwd") == 0) {
@@ -225,4 +229,22 @@ char *trim(char *str) {
     *(end + 1) = '\0';
 
     return start;
+}
+
+/**
+ * Function to change the directory
+*/
+void changeDirectory(char *path, int pathGiven) {
+    // no path was given - go the home directory
+    if (pathGiven == 1) {
+        char *home = getenv("HOME");
+        if(chdir(home) == -1) {
+            perror("ERROR - changing directory failed ");
+        }
+    }
+    else {
+        if(chdir(path) == -1) {
+            perror("ERROR - changing directory failed ");
+        }
+    }
 }

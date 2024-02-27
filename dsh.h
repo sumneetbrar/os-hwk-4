@@ -10,3 +10,4 @@ void runForeground(char *line, char **list);
 void runBackground(char *line, char **list);
 
 char *trim(char *str);
+void changeDirectory(char *path, int pathGiven);
